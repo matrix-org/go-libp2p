@@ -333,7 +333,8 @@ func (ids *IDService) populateMessage(mes *pb.Identify, c network.Conn) {
 
 	// set listen addrs, get our latest addrs from Host.
 	laddrs := ids.Host.Addrs()
-	viaLoopback := manet.IsIPLoopback(c.LocalMultiaddr())
+	// Note: LocalMultiaddr is sometimes 0.0.0.0
+	viaLoopback := manet.IsIPLoopback(c.LocalMultiaddr()) || manet.IsIPLoopback(c.RemoteMultiaddr())
 	mes.ListenAddrs = make([][]byte, 0, len(laddrs))
 	for _, addr := range laddrs {
 		if !viaLoopback && manet.IsIPLoopback(addr) {
