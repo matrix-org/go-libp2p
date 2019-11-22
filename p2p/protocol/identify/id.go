@@ -321,8 +321,12 @@ func (ids *IDService) populateMessage(mes *pb.Identify, c network.Conn) {
 	// send it along with the unsigned addrs
 	signedState, err := host.SignedRoutingStateFromHost(ids.Host)
 	if err != nil {
+		log.Warningf("error generating signed routing state: %v", err)
+	} else {
 		envelopeBytes, err := signedState.Marshal()
 		if err != nil {
+			log.Warningf("error marshaling signed routing state: %v", err)
+		} else {
 			mes.SignedRoutingState = envelopeBytes
 		}
 	}
@@ -389,7 +393,7 @@ func (ids *IDService) consumeMessage(mes *pb.Identify, c network.Conn) {
 	// state record
 	routingState, err := signedRoutingStateFromMsg(mes)
 	if err != nil {
-		log.Warning("error getting routing state from Identify message: %v", err)
+		log.Warningf("error getting routing state from Identify message: %v", err)
 	}
 
 	// Extend the TTLs on the known (probably) good addresses.
