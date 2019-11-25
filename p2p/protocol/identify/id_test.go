@@ -2,6 +2,7 @@ package identify_test
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sort"
 	"testing"
@@ -41,6 +42,9 @@ func subtestIDService(t *testing.T) {
 	testKnowsAddrs(t, h1, h2p, []ma.Multiaddr{}) // nothing
 	testKnowsAddrs(t, h2, h1p, []ma.Multiaddr{}) // nothing
 
+	// the forgetMe addr represents an address for h1 that h2 has learned out of band
+	// (not via identify protocol). Shortly after the identify exchange, it will be
+	// forgotten and replaced by the addrs h1 sends during identify
 	forgetMe, _ := ma.NewMultiaddr("/ip4/1.2.3.4/tcp/1234")
 
 	h2.Peerstore().AddAddr(h1p, forgetMe, peerstore.RecentlyConnectedAddrTTL)
@@ -62,6 +66,7 @@ func subtestIDService(t *testing.T) {
 	// what we should see now is that both peers know about each others listen addresses.
 	t.Log("test peer1 has peer2 addrs correctly")
 	testKnowsAddrs(t, h1, h2p, h2.Peerstore().Addrs(h2p)) // has them
+	testHasCertifiedAddrs(t, h1, h2p, h2.Peerstore().Addrs(h2p)) // should have signed addrs also
 	testHasProtocolVersions(t, h1, h2p)
 	testHasPublicKey(t, h1, h2p, h2.Peerstore().PubKey(h2p)) // h1 should have h2's public key
 
@@ -78,7 +83,11 @@ func subtestIDService(t *testing.T) {
 
 	// and the protocol versions.
 	t.Log("test peer2 has peer1 addrs correctly")
+	// h2 still has the forgetMe addr for h1, since it's not deleted immediately
 	testKnowsAddrs(t, h2, h1p, addrs) // has them
+	// the forgetMe addr was not certified by h1, so h2's CertifiedAddrs for
+	// h1 will only include the ones sent during the exchange
+	testHasCertifiedAddrs(t, h2, h1p, h1.Peerstore().Addrs(h1p))
 	testHasProtocolVersions(t, h2, h1p)
 	testHasPublicKey(t, h2, h1p, h1.Peerstore().PubKey(h1p)) // h1 should have h2's public key
 
@@ -89,26 +98,43 @@ func subtestIDService(t *testing.T) {
 		t.Fatal("should have no connections")
 	}
 
+	// addresses don't immediately expire on disconnect, so we should still have them
 	testKnowsAddrs(t, h2, h1p, addrs)
 	testKnowsAddrs(t, h1, h2p, h2.Peerstore().Addrs(h2p))
+	testHasCertifiedAddrs(t, h1, h2p, h2.Peerstore().Addrs(h2p))
+	testHasCertifiedAddrs(t, h2, h1p, h1.Peerstore().Addrs(h1p))
 
+	// the forgetMe addr had its TTL reduced during the identify exchange,
+	// since it was not present in the exchanged addrs,
+	// so it will be forgotten first
 	time.Sleep(500 * time.Millisecond)
-
-	// Forget the first one.
 	testKnowsAddrs(t, h2, h1p, addrs[:len(addrs)-1])
 
+	// the remaining addrs had their TTLs reduced on disconnect, and
+	// will be forgotten soon after
 	time.Sleep(1 * time.Second)
-
-	// Forget the rest.
 	testKnowsAddrs(t, h1, h2p, []ma.Multiaddr{})
 	testKnowsAddrs(t, h2, h1p, []ma.Multiaddr{})
+	testHasCertifiedAddrs(t, h1, h2p,  []ma.Multiaddr{})
+	testHasCertifiedAddrs(t, h2, h1p,  []ma.Multiaddr{})
+
 }
 
 func testKnowsAddrs(t *testing.T, h host.Host, p peer.ID, expected []ma.Multiaddr) {
 	t.Helper()
 
 	actual := h.Peerstore().Addrs(p)
+	checkAddrs(t, expected, actual, fmt.Sprintf("%s did not have addr for %s", h.ID(), p))
+}
 
+func testHasCertifiedAddrs(t *testing.T, h host.Host, p peer.ID, expected []ma.Multiaddr) {
+	t.Helper()
+	actual := h.Peerstore().CertifiedAddrs(p)
+	checkAddrs(t, expected, actual, fmt.Sprintf("%s did not have certified addr for %s", h.ID(), p))
+}
+
+func checkAddrs(t *testing.T, expected, actual []ma.Multiaddr, msg string) {
+	t.Helper()
 	if len(actual) != len(expected) {
 		t.Errorf("expected: %s", expected)
 		t.Errorf("actual: %s", actual)
@@ -121,7 +147,7 @@ func testKnowsAddrs(t *testing.T, h host.Host, p peer.ID, expected []ma.Multiadd
 	}
 	for _, addr := range expected {
 		if _, found := have[addr.String()]; !found {
-			t.Errorf("%s did not have addr for %s: %s", h.ID(), p, addr)
+			t.Errorf("%s: %s", msg, addr)
 		}
 	}
 }
