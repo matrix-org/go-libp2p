@@ -65,7 +65,7 @@ func subtestIDService(t *testing.T) {
 	// the IDService should be opened automatically, by the network.
 	// what we should see now is that both peers know about each others listen addresses.
 	t.Log("test peer1 has peer2 addrs correctly")
-	testKnowsAddrs(t, h1, h2p, h2.Peerstore().Addrs(h2p)) // has them
+	testKnowsAddrs(t, h1, h2p, h2.Peerstore().Addrs(h2p))        // has them
 	testHasCertifiedAddrs(t, h1, h2p, h2.Peerstore().Addrs(h2p)) // should have signed addrs also
 	testHasProtocolVersions(t, h1, h2p)
 	testHasPublicKey(t, h1, h2p, h2.Peerstore().PubKey(h2p)) // h1 should have h2's public key
@@ -115,8 +115,8 @@ func subtestIDService(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	testKnowsAddrs(t, h1, h2p, []ma.Multiaddr{})
 	testKnowsAddrs(t, h2, h1p, []ma.Multiaddr{})
-	testHasCertifiedAddrs(t, h1, h2p,  []ma.Multiaddr{})
-	testHasCertifiedAddrs(t, h2, h1p,  []ma.Multiaddr{})
+	testHasCertifiedAddrs(t, h1, h2p, []ma.Multiaddr{})
+	testHasCertifiedAddrs(t, h2, h1p, []ma.Multiaddr{})
 
 }
 
