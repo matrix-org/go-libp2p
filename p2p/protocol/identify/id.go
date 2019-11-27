@@ -88,6 +88,8 @@ type IDService struct {
 	emitters     struct {
 		evtPeerProtocolsUpdated event.Emitter
 	}
+
+	useSignedAddrs bool
 }
 
 // NewIDService constructs a new *IDService and activates it by
@@ -107,9 +109,10 @@ func NewIDService(ctx context.Context, h host.Host, opts ...Option) *IDService {
 		Host:      h,
 		UserAgent: userAgent,
 
-		ctx:           ctx,
-		currid:        make(map[network.Conn]chan struct{}),
-		observedAddrs: NewObservedAddrSet(ctx),
+		ctx:            ctx,
+		currid:         make(map[network.Conn]chan struct{}),
+		observedAddrs:  NewObservedAddrSet(ctx),
+		useSignedAddrs: !cfg.disableSignedAddrSupport,
 	}
 
 	// handle local protocol handler updates, and push deltas to peers.
@@ -319,15 +322,17 @@ func (ids *IDService) populateMessage(mes *pb.Identify, c network.Conn) {
 
 	// Generate a signed routing record containing our listen addresses and
 	// send it along with the unsigned addrs
-	signedState, err := host.SignedRoutingStateFromHost(ids.Host)
-	if err != nil {
-		log.Warningf("error generating signed routing state: %v", err)
-	} else {
-		envelopeBytes, err := signedState.Marshal()
+	if ids.useSignedAddrs {
+		signedState, err := host.SignedRoutingStateFromHost(ids.Host)
 		if err != nil {
-			log.Warningf("error marshaling signed routing state: %v", err)
+			log.Warningf("error generating signed routing state: %v", err)
 		} else {
-			mes.SignedRoutingState = envelopeBytes
+			envelopeBytes, err := signedState.Marshal()
+			if err != nil {
+				log.Warningf("error marshaling signed routing state: %v", err)
+			} else {
+				mes.SignedRoutingState = envelopeBytes
+			}
 		}
 	}
 
@@ -391,9 +396,13 @@ func (ids *IDService) consumeMessage(mes *pb.Identify, c network.Conn) {
 
 	// add certified addresses for the peer, if they sent us a signed routing
 	// state record
-	routingState, err := signedRoutingStateFromMsg(mes)
-	if err != nil {
-		log.Warningf("error getting routing state from Identify message: %v", err)
+	var routingState *routing.SignedRoutingState
+	if ids.useSignedAddrs {
+		var err error
+		routingState, err = signedRoutingStateFromMsg(mes)
+		if err != nil {
+			log.Warningf("error getting routing state from Identify message: %v", err)
+		}
 	}
 
 	// Extend the TTLs on the known (probably) good addresses.
