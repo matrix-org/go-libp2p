@@ -446,7 +446,7 @@ func TestCompatibilityWithPeersThatDoNotSupportSignedAddrs(t *testing.T) {
 	h1p := h1.ID()
 	h2p := h2.ID()
 	ids1 := identify.NewIDService(ctx, h1)
-	ids2 := identify.NewIDService(ctx, h2, identify.DisableSignedAddrSupport())
+	ids2 := identify.NewIDService(ctx, h2, identify.DisableSignedAddrSupportForTesting())
 
 	h2pi := h2.Peerstore().PeerInfo(h2p)
 	if err := h1.Connect(ctx, h2pi); err != nil {

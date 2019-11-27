@@ -15,10 +15,11 @@ func UserAgent(ua string) Option {
 	}
 }
 
-// DisableSignedAddrSupport prevents the identify service from sending or parsing
+// DisableSignedAddrSupportForTesting prevents the identify service from sending or parsing
 // routing.SignedRoutingState messages during the exchange. Used for testing
 // compatibility with older versions that do not support signed addresses.
-func DisableSignedAddrSupport() Option {
+// Do not use in production!
+func DisableSignedAddrSupportForTesting() Option {
 	return func(cfg *config) {
 		cfg.disableSignedAddrSupport = true
 	}
