@@ -407,9 +407,9 @@ func TestAddrResolution(t *testing.T) {
 	}
 	addr1 := ma.StringCast("/dnsaddr/example.com")
 	addr2 := ma.StringCast("/ip4/192.0.2.1/tcp/123")
-	p2paddr1 := ma.StringCast("/dnsaddr/example.com/ipfs/" + p1.Pretty())
-	p2paddr2 := ma.StringCast("/ip4/192.0.2.1/tcp/123/ipfs/" + p1.Pretty())
-	p2paddr3 := ma.StringCast("/ip4/192.0.2.1/tcp/123/ipfs/" + p2.Pretty())
+	p2paddr1 := ma.StringCast("/dnsaddr/example.com/p2p/" + p1.Pretty())
+	p2paddr2 := ma.StringCast("/ip4/192.0.2.1/tcp/123/p2p/" + p1.Pretty())
+	p2paddr3 := ma.StringCast("/ip4/192.0.2.1/tcp/123/p2p/" + p2.Pretty())
 
 	backend := &madns.MockBackend{
 		TXT: map[string][]string{"_dnsaddr.example.com": []string{
@@ -435,6 +435,75 @@ func TestAddrResolution(t *testing.T) {
 
 	if len(addrs) != 2 || !addrs[0].Equal(addr1) || !addrs[1].Equal(addr2) {
 		t.Fatalf("expected [%s %s], got %+v", addr1, addr2, addrs)
+	}
+}
+
+func TestAddrResolutionRecursive(t *testing.T) {
+	ctx := context.Background()
+
+	p1, err := test.RandPeerID()
+	if err != nil {
+		t.Error(err)
+	}
+	p2, err := test.RandPeerID()
+	if err != nil {
+		t.Error(err)
+	}
+	addr1 := ma.StringCast("/dnsaddr/example.com")
+	addr2 := ma.StringCast("/ip4/192.0.2.1/tcp/123")
+	p2paddr1 := ma.StringCast("/dnsaddr/example.com/p2p/" + p1.Pretty())
+	p2paddr2 := ma.StringCast("/dnsaddr/example.com/p2p/" + p2.Pretty())
+	p2paddr1i := ma.StringCast("/dnsaddr/foo.example.com/p2p/" + p1.Pretty())
+	p2paddr2i := ma.StringCast("/dnsaddr/bar.example.com/p2p/" + p2.Pretty())
+	p2paddr1f := ma.StringCast("/ip4/192.0.2.1/tcp/123/p2p/" + p1.Pretty())
+
+	backend := &madns.MockBackend{
+		TXT: map[string][]string{
+			"_dnsaddr.example.com": []string{
+				"dnsaddr=" + p2paddr1i.String(),
+				"dnsaddr=" + p2paddr2i.String(),
+			},
+			"_dnsaddr.foo.example.com": []string{
+				"dnsaddr=" + p2paddr1f.String(),
+			},
+			"_dnsaddr.bar.example.com": []string{
+				"dnsaddr=" + p2paddr2i.String(),
+			},
+		},
+	}
+	resolver := &madns.Resolver{Backend: backend}
+
+	h := New(swarmt.GenSwarm(t, ctx), resolver)
+	defer h.Close()
+
+	pi1, err := peer.AddrInfoFromP2pAddr(p2paddr1)
+	if err != nil {
+		t.Error(err)
+	}
+
+	tctx, cancel := context.WithTimeout(ctx, time.Millisecond*100)
+	defer cancel()
+	_ = h.Connect(tctx, *pi1)
+
+	addrs1 := h.Peerstore().Addrs(pi1.ID)
+	sort.Sort(sortedMultiaddrs(addrs1))
+
+	if len(addrs1) != 2 || !addrs1[0].Equal(addr1) || !addrs1[1].Equal(addr2) {
+		t.Fatalf("expected [%s %s], got %+v", addr1, addr2, addrs1)
+	}
+
+	pi2, err := peer.AddrInfoFromP2pAddr(p2paddr2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_ = h.Connect(tctx, *pi2)
+
+	addrs2 := h.Peerstore().Addrs(pi2.ID)
+	sort.Sort(sortedMultiaddrs(addrs2))
+
+	if len(addrs2) != 1 || !addrs2[0].Equal(addr1) {
+		t.Fatalf("expected [%s], got %+v", addr1, addrs2)
 	}
 }
 

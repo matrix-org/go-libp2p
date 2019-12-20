@@ -31,6 +31,10 @@ import (
 	msmux "github.com/multiformats/go-multistream"
 )
 
+// The maximum number of address resolution steps we'll perform for a single
+// peer (for all addresses).
+const maxAddressResolution = 32
+
 var log = logging.Logger("basichost")
 
 var (
@@ -522,28 +526,59 @@ func (h *BasicHost) resolveAddrs(ctx context.Context, pi peer.AddrInfo) ([]ma.Mu
 		return nil, err
 	}
 
-	var addrs []ma.Multiaddr
-	for _, addr := range pi.Addrs {
-		addrs = append(addrs, addr)
+	resolveSteps := 0
+
+	// Recursively resolve all addrs.
+	//
+	// While the toResolve list is non-empty:
+	// * Pop an address off.
+	// * If the address is fully resolved, add it to the resolved list.
+	// * Otherwise, resolve it and add the results to the "to resolve" list.
+	toResolve := append(([]ma.Multiaddr)(nil), pi.Addrs...)
+	resolved := make([]ma.Multiaddr, 0, len(pi.Addrs))
+	for len(toResolve) > 0 {
+		// pop the last addr off.
+		addr := toResolve[len(toResolve)-1]
+		toResolve = toResolve[:len(toResolve)-1]
+
+		// if it's resolved, add it to the resolved list.
 		if !madns.Matches(addr) {
+			resolved = append(resolved, addr)
 			continue
 		}
 
+		resolveSteps++
+
+		// We've resolved too many addresses. We can keep all the fully
+		// resolved addresses but we'll need to skip the rest.
+		if resolveSteps >= maxAddressResolution {
+			log.Warningf(
+				"peer %s asked us to resolve too many addresses: %s/%s",
+				pi.ID,
+				resolveSteps,
+				maxAddressResolution,
+			)
+			continue
+		}
+
+		// otherwise, resolve it
 		reqaddr := addr.Encapsulate(p2paddr)
 		resaddrs, err := h.maResolver.Resolve(ctx, reqaddr)
 		if err != nil {
 			log.Infof("error resolving %s: %s", reqaddr, err)
 		}
+
+		// add the results to the toResolve list.
 		for _, res := range resaddrs {
 			pi, err := peer.AddrInfoFromP2pAddr(res)
 			if err != nil {
 				log.Infof("error parsing %s: %s", res, err)
 			}
-			addrs = append(addrs, pi.Addrs...)
+			toResolve = append(toResolve, pi.Addrs...)
 		}
 	}
 
-	return addrs, nil
+	return resolved, nil
 }
 
 // dialPeer opens a connection to peer, and makes sure to identify
