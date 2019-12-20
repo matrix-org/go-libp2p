@@ -84,12 +84,15 @@ type IDService struct {
 	// TODO: instead of expiring, remove these when we disconnect
 	observedAddrs *ObservedAddrSet
 
-	subscription event.Subscription
-	emitters     struct {
+	routingStateManager *routingStateManager
+	useSignedAddrs      bool
+
+	subscriptions struct {
+		localProtocolsUpdated event.Subscription
+	}
+	emitters struct {
 		evtPeerProtocolsUpdated event.Emitter
 	}
-
-	useSignedAddrs bool
 }
 
 // NewIDService constructs a new *IDService and activates it by
@@ -117,7 +120,7 @@ func NewIDService(ctx context.Context, h host.Host, opts ...Option) *IDService {
 
 	// handle local protocol handler updates, and push deltas to peers.
 	var err error
-	s.subscription, err = h.EventBus().Subscribe(&event.EvtLocalProtocolsUpdated{}, eventbus.BufSize(128))
+	s.subscriptions.localProtocolsUpdated, err = h.EventBus().Subscribe(&event.EvtLocalProtocolsUpdated{}, eventbus.BufSize(128))
 	if err != nil {
 		log.Warningf("identify service not subscribed to local protocol handlers updates; err: %s", err)
 	} else {
@@ -129,6 +132,11 @@ func NewIDService(ctx context.Context, h host.Host, opts ...Option) *IDService {
 		log.Warningf("identify service not emitting peer protocol updates; err: %s", err)
 	}
 
+	s.routingStateManager, err = NewRoutingStateManager(ctx, h, cfg.includeLocalAddrsInRoutingState)
+	if err != nil {
+		log.Warnf("identify service not tracking routing state changes; err: %s", err)
+	}
+
 	h.SetStreamHandler(ID, s.requestHandler)
 	h.SetStreamHandler(IDPush, s.pushHandler)
 	h.SetStreamHandler(IDDelta, s.deltaHandler)
@@ -137,7 +145,7 @@ func NewIDService(ctx context.Context, h host.Host, opts ...Option) *IDService {
 }
 
 func (ids *IDService) handleEvents() {
-	sub := ids.subscription
+	sub := ids.subscriptions.localProtocolsUpdated
 	defer func() {
 		_ = sub.Close()
 		// drain the channel.
@@ -322,17 +330,13 @@ func (ids *IDService) populateMessage(mes *pb.Identify, c network.Conn) {
 
 	// Generate a signed routing record containing our listen addresses and
 	// send it along with the unsigned addrs
-	if ids.useSignedAddrs {
-		signedState, err := host.SignedRoutingStateFromHost(ids.Host)
+	signedState := ids.routingStateManager.LatestState()
+	if ids.useSignedAddrs && signedState != nil {
+		envelopeBytes, err := signedState.Marshal()
 		if err != nil {
-			log.Warningf("error generating signed routing state: %v", err)
+			log.Warningf("error marshaling signed routing state: %v", err)
 		} else {
-			envelopeBytes, err := signedState.Marshal()
-			if err != nil {
-				log.Warningf("error marshaling signed routing state: %v", err)
-			} else {
-				mes.SignedRoutingState = envelopeBytes
-			}
+			mes.SignedRoutingState = envelopeBytes
 		}
 	}
 

@@ -1,8 +1,9 @@
 package identify
 
 type config struct {
-	userAgent                string
-	disableSignedAddrSupport bool
+	userAgent                       string
+	disableSignedAddrSupport        bool
+	includeLocalAddrsInRoutingState bool
 }
 
 // Option is an option function for identify.
@@ -23,4 +24,8 @@ func DisableSignedAddrSupportForTesting() Option {
 	return func(cfg *config) {
 		cfg.disableSignedAddrSupport = true
 	}
+}
+
+func IncludeLocalAddrsInRoutingState(cfg *config) {
+	cfg.includeLocalAddrsInRoutingState = true
 }
