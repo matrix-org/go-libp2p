@@ -88,7 +88,8 @@ type IDService struct {
 	useSignedAddrs      bool
 
 	subscriptions struct {
-		localProtocolsUpdated event.Subscription
+		localProtocolsUpdated    event.Subscription
+		localRoutingStateUpdated event.Subscription
 	}
 	emitters struct {
 		evtPeerProtocolsUpdated event.Emitter
@@ -124,7 +125,13 @@ func NewIDService(ctx context.Context, h host.Host, opts ...Option) *IDService {
 	if err != nil {
 		log.Warningf("identify service not subscribed to local protocol handlers updates; err: %s", err)
 	} else {
-		go s.handleEvents()
+		go s.handleEvents(s.subscriptions.localProtocolsUpdated, s.handleProtosChanged)
+	}
+	s.subscriptions.localRoutingStateUpdated, err = h.EventBus().Subscribe(&event.EvtLocalPeerRoutingStateUpdated{}, eventbus.BufSize(128))
+	if err != nil {
+		log.Warnf("identify service not subscribed to local routing state changes; err: %s", err)
+	} else {
+		go s.handleEvents(s.subscriptions.localRoutingStateUpdated, s.handleRoutingStateUpdated)
 	}
 
 	s.emitters.evtPeerProtocolsUpdated, err = h.EventBus().Emitter(&event.EvtPeerProtocolsUpdated{})
@@ -144,8 +151,7 @@ func NewIDService(ctx context.Context, h host.Host, opts ...Option) *IDService {
 	return s
 }
 
-func (ids *IDService) handleEvents() {
-	sub := ids.subscriptions.localProtocolsUpdated
+func (ids *IDService) handleEvents(sub event.Subscription, handler func(interface{})) {
 	defer func() {
 		_ = sub.Close()
 		// drain the channel.
@@ -159,11 +165,20 @@ func (ids *IDService) handleEvents() {
 			if !more {
 				return
 			}
-			ids.fireProtocolDelta(evt.(event.EvtLocalProtocolsUpdated))
+			handler(evt)
 		case <-ids.ctx.Done():
 			return
 		}
 	}
+}
+
+func (ids *IDService) handleProtosChanged(evt interface{}) {
+	ids.fireProtocolDelta(evt.(event.EvtLocalProtocolsUpdated))
+}
+
+func (ids *IDService) handleRoutingStateUpdated(evt interface{}) {
+	log.Debug("triggering push based on routing state updated event")
+	ids.Push()
 }
 
 // OwnObservedAddrs returns the addresses peers have reported we've dialed from

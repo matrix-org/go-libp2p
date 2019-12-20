@@ -88,6 +88,7 @@ type BasicHost struct {
 	lastAddrs []ma.Multiaddr
 	emitters  struct {
 		evtLocalProtocolsUpdated event.Emitter
+		evtLocalAddrsUpdated     event.Emitter
 	}
 }
 
@@ -141,6 +142,9 @@ func NewHost(ctx context.Context, net network.Network, opts *HostOpts) (*BasicHo
 	if h.emitters.evtLocalProtocolsUpdated, err = h.eventbus.Emitter(&event.EvtLocalProtocolsUpdated{}); err != nil {
 		return nil, err
 	}
+	if h.emitters.evtLocalAddrsUpdated, err = h.eventbus.Emitter(&event.EvtLocalAddressesUpdated{}); err != nil {
+		return nil, err
+	}
 
 	h.proc = goprocessctx.WithContextAndTeardown(ctx, func() error {
 		if h.natmgr != nil {
@@ -150,6 +154,7 @@ func NewHost(ctx context.Context, net network.Network, opts *HostOpts) (*BasicHo
 			h.cmgr.Close()
 		}
 		_ = h.emitters.evtLocalProtocolsUpdated.Close()
+		_ = h.emitters.evtLocalAddrsUpdated.Close()
 		return h.Network().Close()
 	})
 
@@ -295,21 +300,29 @@ func (h *BasicHost) newStreamHandler(s network.Stream) {
 	go handle(protoID, s)
 }
 
-// PushIdentify pushes an identify update through the identify push protocol
+// CheckForAddressChanges determines whether our listen addresses have recently
+// changed and emits an EvtLocalAddressesUpdatedEvent if so.
 // Warning: this interface is unstable and may disappear in the future.
-func (h *BasicHost) PushIdentify() {
-	push := false
+func (h *BasicHost) CheckForAddressChanges() {
+	changed := false
 
 	h.mx.Lock()
 	addrs := h.Addrs()
-	if !sameAddrs(addrs, h.lastAddrs) {
-		push = true
+	added, removed := addrDiff(h.lastAddrs, addrs)
+	if len(added) != 0 || len(removed) != 0 {
+		changed = true
 		h.lastAddrs = addrs
 	}
 	h.mx.Unlock()
 
-	if push {
-		h.ids.Push()
+	if changed {
+		err := h.emitters.evtLocalAddrsUpdated.Emit(event.EvtLocalAddressesUpdated{
+			Added:   added,
+			Removed: removed,
+		})
+		if err != nil {
+			log.Warnf("error emitting event for updated addrs: %s", err)
+		}
 	}
 }
 
@@ -329,7 +342,7 @@ func (h *BasicHost) background(p goprocess.Process) {
 	for {
 		select {
 		case <-ticker.C:
-			h.PushIdentify()
+			h.CheckForAddressChanges()
 
 		case <-p.Closing():
 			return
@@ -337,24 +350,23 @@ func (h *BasicHost) background(p goprocess.Process) {
 	}
 }
 
-func sameAddrs(a, b []ma.Multiaddr) bool {
-	if len(a) != len(b) {
-		return false
-	}
+func addrDiff(old, new []ma.Multiaddr) (added, removed []ma.Multiaddr) {
+	oldmap := make(map[string]ma.Multiaddr, len(old))
 
-	bmap := make(map[string]struct{}, len(b))
-	for _, addr := range b {
-		bmap[string(addr.Bytes())] = struct{}{}
+	for _, addr := range old {
+		oldmap[string(addr.Bytes())] = addr
 	}
-
-	for _, addr := range a {
-		_, ok := bmap[string(addr.Bytes())]
+	for _, addr := range new {
+		_, ok := oldmap[string(addr.Bytes())]
 		if !ok {
-			return false
+			added = append(added, addr)
 		}
+		delete(oldmap, string(addr.Bytes()))
 	}
-
-	return true
+	for _, addr := range oldmap {
+		removed = append(removed, addr)
+	}
+	return added, removed
 }
 
 // ID returns the (local) peer.ID associated with this Host

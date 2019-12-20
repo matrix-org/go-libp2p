@@ -115,7 +115,7 @@ func (ar *AutoRelay) background(ctx context.Context) {
 			ar.cachedAddrs = nil
 			ar.mx.Unlock()
 			push = false
-			ar.host.PushIdentify()
+			ar.host.CheckForAddressChanges()
 		}
 
 		select {

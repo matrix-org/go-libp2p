@@ -5,7 +5,7 @@ require (
 	github.com/ipfs/go-cid v0.0.4
 	github.com/ipfs/go-detect-race v0.0.1
 	github.com/ipfs/go-ipfs-util v0.0.1
-	github.com/ipfs/go-log v0.0.1
+	github.com/ipfs/go-log v1.0.0
 	github.com/jbenet/go-cienv v0.1.0
 	github.com/jbenet/goprocess v0.1.3
 	github.com/libp2p/go-conn-security-multistream v0.1.0
@@ -13,7 +13,7 @@ require (
 	github.com/libp2p/go-libp2p-autonat v0.1.1
 	github.com/libp2p/go-libp2p-blankhost v0.1.4
 	github.com/libp2p/go-libp2p-circuit v0.1.4
-	github.com/libp2p/go-libp2p-core v0.3.1-0.20191220211501-15623e878c25
+	github.com/libp2p/go-libp2p-core v0.3.1-0.20191220211544-b57c5023fbf9
 	github.com/libp2p/go-libp2p-discovery v0.2.0
 	github.com/libp2p/go-libp2p-loggables v0.1.0
 	github.com/libp2p/go-libp2p-mplex v0.2.1
