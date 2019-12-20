@@ -3,6 +3,7 @@ package identify
 import (
 	"context"
 	"fmt"
+	"github.com/libp2p/go-libp2p-core/routing"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -316,6 +317,16 @@ func (ids *IDService) populateMessage(mes *pb.Identify, c network.Conn) {
 	}
 	log.Debugf("%s sent listen addrs to %s: %s", c.LocalPeer(), c.RemotePeer(), laddrs)
 
+	// Generate a signed routing record containing our listen addresses and
+	// send it along with the unsigned addrs
+	signedState, err := host.SignedRoutingStateFromHost(ids.Host)
+	if err != nil {
+		envelopeBytes, err := signedState.Marshal()
+		if err != nil {
+			mes.SignedRoutingState = envelopeBytes
+		}
+	}
+
 	// set our public key
 	ownKey := ids.Host.Peerstore().PubKey(ids.Host.ID())
 
@@ -374,18 +385,35 @@ func (ids *IDService) consumeMessage(mes *pb.Identify, c network.Conn) {
 	// that picks random source ports, this can cause DHT nodes to collect
 	// many undialable addresses for other peers.
 
+	// add certified addresses for the peer, if they sent us a signed routing
+	// state record
+	routingState, err := signedRoutingStateFromMsg(mes)
+	if err != nil {
+		log.Warning("error getting routing state from Identify message: %v", err)
+	}
+
 	// Extend the TTLs on the known (probably) good addresses.
 	// Taking the lock ensures that we don't concurrently process a disconnect.
 	ids.addrMu.Lock()
-	switch ids.Host.Network().Connectedness(p) {
-	case network.Connected:
-		// invalidate previous addrs -- we use a transient ttl instead of 0 to ensure there
-		// is no period of having no good addrs whatsoever
-		ids.Host.Peerstore().UpdateAddrs(p, peerstore.ConnectedAddrTTL, transientTTL)
-		ids.Host.Peerstore().AddAddrs(p, lmaddrs, peerstore.ConnectedAddrTTL)
-	default:
-		ids.Host.Peerstore().UpdateAddrs(p, peerstore.ConnectedAddrTTL, transientTTL)
-		ids.Host.Peerstore().AddAddrs(p, lmaddrs, peerstore.RecentlyConnectedAddrTTL)
+	ttl := peerstore.RecentlyConnectedAddrTTL
+	if ids.Host.Network().Connectedness(p) == network.Connected {
+		ttl = peerstore.ConnectedAddrTTL
+	}
+
+	// invalidate previous addrs -- we use a transient ttl instead of 0 to ensure there
+	// is no period of having no good addrs whatsoever
+	ids.Host.Peerstore().UpdateAddrs(p, peerstore.ConnectedAddrTTL, transientTTL)
+
+	// add signed addrs if we have them
+	if routingState != nil {
+		addErr := ids.Host.Peerstore().AddCertifiedAddrs(routingState, ttl)
+		if addErr != nil {
+			log.Errorf("error adding signed addrs to peerstore: %v", addErr)
+			// fall back to adding unsigned addrs
+			ids.Host.Peerstore().AddAddrs(p, lmaddrs, ttl)
+		}
+	} else {
+		ids.Host.Peerstore().AddAddrs(p, lmaddrs, ttl)
 	}
 	ids.addrMu.Unlock()
 
@@ -570,6 +598,13 @@ func addrInAddrs(a ma.Multiaddr, as []ma.Multiaddr) bool {
 		}
 	}
 	return false
+}
+
+func signedRoutingStateFromMsg(msg *pb.Identify) (*routing.SignedRoutingState, error) {
+	if msg.SignedRoutingState == nil || len(msg.SignedRoutingState) == 0 {
+		return nil, nil
+	}
+	return routing.UnmarshalSignedRoutingState(msg.SignedRoutingState)
 }
 
 // netNotifiee defines methods to be used with the IpfsDHT

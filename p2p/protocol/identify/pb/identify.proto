@@ -36,4 +36,11 @@ message Identify {
 
   // a delta update is incompatible with everything else. If this field is included, none of the others can appear.
   optional Delta delta = 7;
+
+  // signedRoutingState contains a serialized SignedEnvelope containing a RoutingStateRecord,
+  // signed by the sending node. It contains the same addresses as the listenAddrs field, but
+  // in a form that lets us share authenticated addrs with other peers.
+  // see github.com/libp2p/go-libp2p-core/crypto/pb/envelope.proto and
+  // github.com/libp2p/go-libp2p-core/routing/pb/routing_state.proto for message definitions.
+  optional bytes signedRoutingState = 8;
 }

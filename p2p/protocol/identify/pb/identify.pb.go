@@ -8,7 +8,6 @@ import (
 	proto "github.com/gogo/protobuf/proto"
 	io "io"
 	math "math"
-	math_bits "math/bits"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -20,7 +19,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
 type Delta struct {
 	// new protocols now serviced by the peer.
@@ -46,7 +45,7 @@ func (m *Delta) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_Delta.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
+		n, err := m.MarshalTo(b)
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +97,13 @@ type Identify struct {
 	// protocols are the services this node is running
 	Protocols []string `protobuf:"bytes,3,rep,name=protocols" json:"protocols,omitempty"`
 	// a delta update is incompatible with everything else. If this field is included, none of the others can appear.
-	Delta                *Delta   `protobuf:"bytes,7,opt,name=delta" json:"delta,omitempty"`
+	Delta *Delta `protobuf:"bytes,7,opt,name=delta" json:"delta,omitempty"`
+	// signedRoutingState contains a serialized SignedEnvelope containing a RoutingStateRecord,
+	// signed by the sending node. It contains the same addresses as the listenAddrs field, but
+	// in a form that lets us share authenticated addrs with other peers.
+	// see github.com/libp2p/go-libp2p-core/crypto/pb/envelope.proto and
+	// github.com/libp2p/go-libp2p-core/routing/pb/routing_state.proto for message definitions.
+	SignedRoutingState   []byte   `protobuf:"bytes,8,opt,name=signedRoutingState" json:"signedRoutingState,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -118,7 +123,7 @@ func (m *Identify) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_Identify.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
+		n, err := m.MarshalTo(b)
 		if err != nil {
 			return nil, err
 		}
@@ -186,6 +191,13 @@ func (m *Identify) GetDelta() *Delta {
 	return nil
 }
 
+func (m *Identify) GetSignedRoutingState() []byte {
+	if m != nil {
+		return m.SignedRoutingState
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterType((*Delta)(nil), "identify.pb.Delta")
 	proto.RegisterType((*Identify)(nil), "identify.pb.Identify")
@@ -194,29 +206,31 @@ func init() {
 func init() { proto.RegisterFile("identify.proto", fileDescriptor_83f1e7e6b485409f) }
 
 var fileDescriptor_83f1e7e6b485409f = []byte{
-	// 251 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x5c, 0x90, 0xb1, 0x4e, 0xc3, 0x30,
-	0x14, 0x45, 0xe5, 0x96, 0x02, 0x79, 0xb1, 0x5a, 0xe9, 0x4d, 0x1e, 0x50, 0x64, 0xb2, 0xe0, 0x29,
-	0x03, 0x7f, 0x00, 0x62, 0x41, 0x2c, 0xc8, 0x48, 0xac, 0x28, 0xa9, 0x1f, 0xc8, 0x52, 0x1a, 0x57,
-	0x8e, 0x41, 0xea, 0xce, 0xc7, 0x31, 0xf2, 0x09, 0x28, 0x5f, 0x82, 0xe2, 0x92, 0x26, 0x65, 0xf4,
-	0xd1, 0x91, 0xef, 0xbb, 0x17, 0x96, 0xd6, 0x50, 0x13, 0xec, 0xeb, 0xae, 0xd8, 0x7a, 0x17, 0x1c,
-	0xa6, 0xe3, 0xbb, 0xca, 0x9f, 0x60, 0x71, 0x47, 0x75, 0x28, 0xf1, 0x0a, 0x56, 0xa5, 0x31, 0x64,
-	0x5e, 0xa2, 0xb4, 0x76, 0x75, 0x2b, 0x98, 0x9c, 0xab, 0x44, 0x2f, 0x23, 0x7e, 0x1c, 0x28, 0x5e,
-	0x02, 0xf7, 0x9b, 0x89, 0x35, 0x8b, 0x56, 0xea, 0x37, 0x07, 0x25, 0xff, 0x9c, 0xc1, 0xf9, 0xfd,
-	0x5f, 0x08, 0x2a, 0x58, 0x0d, 0xf2, 0x33, 0xf9, 0xd6, 0xba, 0x46, 0x2c, 0x24, 0x53, 0x89, 0xfe,
-	0x8f, 0x31, 0x07, 0x5e, 0xbe, 0x51, 0x13, 0x06, 0xed, 0x34, 0x6a, 0x47, 0x0c, 0x2f, 0x20, 0xd9,
-	0xbe, 0x57, 0xb5, 0x5d, 0x3f, 0xd0, 0x4e, 0x30, 0xc9, 0x14, 0xd7, 0x23, 0x40, 0x09, 0x69, 0x6d,
-	0xdb, 0x40, 0xcd, 0x8d, 0x31, 0x7e, 0x7f, 0x1a, 0xd7, 0x53, 0xd4, 0x67, 0xb8, 0xaa, 0x25, 0xff,
-	0x41, 0xa6, 0x07, 0xe2, 0x24, 0x7e, 0x71, 0xc4, 0x62, 0xc6, 0xa1, 0xde, 0x3c, 0xd6, 0x1b, 0x01,
-	0x2a, 0x58, 0x98, 0x7e, 0x31, 0x71, 0x26, 0x99, 0x4a, 0xaf, 0xb1, 0x98, 0xcc, 0x59, 0xc4, 0x2d,
-	0xf5, 0x5e, 0xb8, 0xe5, 0x5f, 0x5d, 0xc6, 0xbe, 0xbb, 0x8c, 0xfd, 0x74, 0x19, 0xfb, 0x0d, 0x00,
-	0x00, 0xff, 0xff, 0xa1, 0x77, 0x03, 0x42, 0x87, 0x01, 0x00, 0x00,
+	// 275 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x90, 0xb1, 0x4e, 0xf3, 0x30,
+	0x14, 0x85, 0xe5, 0xf6, 0xef, 0x4f, 0x7b, 0x13, 0xb5, 0xd2, 0x9d, 0x3c, 0xa0, 0x28, 0x64, 0xc1,
+	0x53, 0x06, 0xde, 0x00, 0xc4, 0x82, 0x58, 0x90, 0x2b, 0xb1, 0xa2, 0xa4, 0xbe, 0x44, 0x96, 0x52,
+	0xbb, 0x72, 0x5c, 0xa4, 0xbe, 0x17, 0x0f, 0xc1, 0xc8, 0x23, 0xa0, 0x3c, 0x09, 0x8a, 0x4b, 0x9a,
+	0x14, 0x31, 0xfa, 0xf3, 0x27, 0x1f, 0x9f, 0x03, 0x4b, 0xad, 0xc8, 0x78, 0xfd, 0x7a, 0xc8, 0x77,
+	0xce, 0x7a, 0x8b, 0xd1, 0x70, 0x2e, 0xb3, 0x35, 0xcc, 0xee, 0xa9, 0xf6, 0x05, 0x5e, 0xc3, 0xaa,
+	0x50, 0x8a, 0xd4, 0x4b, 0x90, 0x36, 0xb6, 0x6e, 0x38, 0x4b, 0xa7, 0x62, 0x21, 0x97, 0x01, 0x3f,
+	0xf5, 0x14, 0xaf, 0x20, 0x76, 0xdb, 0x91, 0x35, 0x09, 0x56, 0xe4, 0xb6, 0x27, 0x25, 0x7b, 0x9f,
+	0xc0, 0xfc, 0xe1, 0x27, 0x04, 0x05, 0xac, 0x7a, 0xf9, 0x99, 0x5c, 0xa3, 0xad, 0xe1, 0xb3, 0x94,
+	0x89, 0x85, 0xfc, 0x8d, 0x31, 0x83, 0xb8, 0xa8, 0xc8, 0xf8, 0x5e, 0xfb, 0x1f, 0xb4, 0x33, 0x86,
+	0x97, 0xb0, 0xd8, 0xed, 0xcb, 0x5a, 0x6f, 0x1e, 0xe9, 0xc0, 0x59, 0xca, 0x44, 0x2c, 0x07, 0x80,
+	0x29, 0x44, 0xb5, 0x6e, 0x3c, 0x99, 0x5b, 0xa5, 0xdc, 0xf1, 0x6b, 0xb1, 0x1c, 0xa3, 0x2e, 0xc3,
+	0x96, 0x0d, 0xb9, 0x37, 0x52, 0x1d, 0xe0, 0xff, 0xc2, 0x13, 0x67, 0x2c, 0x64, 0x9c, 0xea, 0x4d,
+	0x43, 0xbd, 0x01, 0xa0, 0x80, 0x99, 0xea, 0x16, 0xe3, 0x17, 0x29, 0x13, 0xd1, 0x0d, 0xe6, 0xa3,
+	0x39, 0xf3, 0xb0, 0xa5, 0x3c, 0x0a, 0x98, 0x03, 0x36, 0xba, 0x32, 0xa4, 0xa4, 0xdd, 0x7b, 0x6d,
+	0xaa, 0xb5, 0x2f, 0x3c, 0xf1, 0x79, 0x48, 0xfc, 0xe3, 0xe6, 0x2e, 0xfe, 0x68, 0x13, 0xf6, 0xd9,
+	0x26, 0xec, 0xab, 0x4d, 0xd8, 0x77, 0x00, 0x00, 0x00, 0xff, 0xff, 0x7b, 0x1e, 0x66, 0x03, 0xb7,
+	0x01, 0x00, 0x00,
 }
 
 func (m *Delta) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -224,44 +238,50 @@ func (m *Delta) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Delta) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *Delta) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
+	if len(m.AddedProtocols) > 0 {
+		for _, s := range m.AddedProtocols {
+			dAtA[i] = 0xa
+			i++
+			l = len(s)
+			for l >= 1<<7 {
+				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
+				l >>= 7
+				i++
+			}
+			dAtA[i] = uint8(l)
+			i++
+			i += copy(dAtA[i:], s)
+		}
 	}
 	if len(m.RmProtocols) > 0 {
-		for iNdEx := len(m.RmProtocols) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.RmProtocols[iNdEx])
-			copy(dAtA[i:], m.RmProtocols[iNdEx])
-			i = encodeVarintIdentify(dAtA, i, uint64(len(m.RmProtocols[iNdEx])))
-			i--
+		for _, s := range m.RmProtocols {
 			dAtA[i] = 0x12
+			i++
+			l = len(s)
+			for l >= 1<<7 {
+				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
+				l >>= 7
+				i++
+			}
+			dAtA[i] = uint8(l)
+			i++
+			i += copy(dAtA[i:], s)
 		}
 	}
-	if len(m.AddedProtocols) > 0 {
-		for iNdEx := len(m.AddedProtocols) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.AddedProtocols[iNdEx])
-			copy(dAtA[i:], m.AddedProtocols[iNdEx])
-			i = encodeVarintIdentify(dAtA, i, uint64(len(m.AddedProtocols[iNdEx])))
-			i--
-			dAtA[i] = 0xa
-		}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	return len(dAtA) - i, nil
+	return i, nil
 }
 
 func (m *Identify) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -269,90 +289,87 @@ func (m *Identify) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Identify) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *Identify) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	if m.Delta != nil {
-		{
-			size, err := m.Delta.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintIdentify(dAtA, i, uint64(size))
-		}
-		i--
-		dAtA[i] = 0x3a
-	}
-	if m.AgentVersion != nil {
-		i -= len(*m.AgentVersion)
-		copy(dAtA[i:], *m.AgentVersion)
-		i = encodeVarintIdentify(dAtA, i, uint64(len(*m.AgentVersion)))
-		i--
-		dAtA[i] = 0x32
-	}
-	if m.ProtocolVersion != nil {
-		i -= len(*m.ProtocolVersion)
-		copy(dAtA[i:], *m.ProtocolVersion)
-		i = encodeVarintIdentify(dAtA, i, uint64(len(*m.ProtocolVersion)))
-		i--
-		dAtA[i] = 0x2a
-	}
-	if m.ObservedAddr != nil {
-		i -= len(m.ObservedAddr)
-		copy(dAtA[i:], m.ObservedAddr)
-		i = encodeVarintIdentify(dAtA, i, uint64(len(m.ObservedAddr)))
-		i--
-		dAtA[i] = 0x22
-	}
-	if len(m.Protocols) > 0 {
-		for iNdEx := len(m.Protocols) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.Protocols[iNdEx])
-			copy(dAtA[i:], m.Protocols[iNdEx])
-			i = encodeVarintIdentify(dAtA, i, uint64(len(m.Protocols[iNdEx])))
-			i--
-			dAtA[i] = 0x1a
-		}
+	if m.PublicKey != nil {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintIdentify(dAtA, i, uint64(len(m.PublicKey)))
+		i += copy(dAtA[i:], m.PublicKey)
 	}
 	if len(m.ListenAddrs) > 0 {
-		for iNdEx := len(m.ListenAddrs) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.ListenAddrs[iNdEx])
-			copy(dAtA[i:], m.ListenAddrs[iNdEx])
-			i = encodeVarintIdentify(dAtA, i, uint64(len(m.ListenAddrs[iNdEx])))
-			i--
+		for _, b := range m.ListenAddrs {
 			dAtA[i] = 0x12
+			i++
+			i = encodeVarintIdentify(dAtA, i, uint64(len(b)))
+			i += copy(dAtA[i:], b)
 		}
 	}
-	if m.PublicKey != nil {
-		i -= len(m.PublicKey)
-		copy(dAtA[i:], m.PublicKey)
-		i = encodeVarintIdentify(dAtA, i, uint64(len(m.PublicKey)))
-		i--
-		dAtA[i] = 0xa
+	if len(m.Protocols) > 0 {
+		for _, s := range m.Protocols {
+			dAtA[i] = 0x1a
+			i++
+			l = len(s)
+			for l >= 1<<7 {
+				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
+				l >>= 7
+				i++
+			}
+			dAtA[i] = uint8(l)
+			i++
+			i += copy(dAtA[i:], s)
+		}
 	}
-	return len(dAtA) - i, nil
+	if m.ObservedAddr != nil {
+		dAtA[i] = 0x22
+		i++
+		i = encodeVarintIdentify(dAtA, i, uint64(len(m.ObservedAddr)))
+		i += copy(dAtA[i:], m.ObservedAddr)
+	}
+	if m.ProtocolVersion != nil {
+		dAtA[i] = 0x2a
+		i++
+		i = encodeVarintIdentify(dAtA, i, uint64(len(*m.ProtocolVersion)))
+		i += copy(dAtA[i:], *m.ProtocolVersion)
+	}
+	if m.AgentVersion != nil {
+		dAtA[i] = 0x32
+		i++
+		i = encodeVarintIdentify(dAtA, i, uint64(len(*m.AgentVersion)))
+		i += copy(dAtA[i:], *m.AgentVersion)
+	}
+	if m.Delta != nil {
+		dAtA[i] = 0x3a
+		i++
+		i = encodeVarintIdentify(dAtA, i, uint64(m.Delta.Size()))
+		n1, err := m.Delta.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n1
+	}
+	if m.SignedRoutingState != nil {
+		dAtA[i] = 0x42
+		i++
+		i = encodeVarintIdentify(dAtA, i, uint64(len(m.SignedRoutingState)))
+		i += copy(dAtA[i:], m.SignedRoutingState)
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
 }
 
 func encodeVarintIdentify(dAtA []byte, offset int, v uint64) int {
-	offset -= sovIdentify(v)
-	base := offset
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
 	dAtA[offset] = uint8(v)
-	return base
+	return offset + 1
 }
 func (m *Delta) Size() (n int) {
 	if m == nil {
@@ -416,6 +433,10 @@ func (m *Identify) Size() (n int) {
 		l = m.Delta.Size()
 		n += 1 + l + sovIdentify(uint64(l))
 	}
+	if m.SignedRoutingState != nil {
+		l = len(m.SignedRoutingState)
+		n += 1 + l + sovIdentify(uint64(l))
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -423,7 +444,14 @@ func (m *Identify) Size() (n int) {
 }
 
 func sovIdentify(x uint64) (n int) {
-	return (math_bits.Len64(x|1) + 6) / 7
+	for {
+		n++
+		x >>= 7
+		if x == 0 {
+			break
+		}
+	}
+	return n
 }
 func sozIdentify(x uint64) (n int) {
 	return sovIdentify(uint64((x << 1) ^ uint64((int64(x) >> 63))))
@@ -809,6 +837,40 @@ func (m *Identify) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SignedRoutingState", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowIdentify
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthIdentify
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthIdentify
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SignedRoutingState = append(m.SignedRoutingState[:0], dAtA[iNdEx:postIndex]...)
+			if m.SignedRoutingState == nil {
+				m.SignedRoutingState = []byte{}
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipIdentify(dAtA[iNdEx:])
@@ -837,7 +899,6 @@ func (m *Identify) Unmarshal(dAtA []byte) error {
 func skipIdentify(dAtA []byte) (n int, err error) {
 	l := len(dAtA)
 	iNdEx := 0
-	depth := 0
 	for iNdEx < l {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
@@ -869,8 +930,10 @@ func skipIdentify(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
+			return iNdEx, nil
 		case 1:
 			iNdEx += 8
+			return iNdEx, nil
 		case 2:
 			var length int
 			for shift := uint(0); ; shift += 7 {
@@ -894,27 +957,52 @@ func skipIdentify(dAtA []byte) (n int, err error) {
 			if iNdEx < 0 {
 				return 0, ErrInvalidLengthIdentify
 			}
+			return iNdEx, nil
 		case 3:
-			depth++
-		case 4:
-			if depth == 0 {
-				return 0, ErrUnexpectedEndOfGroupIdentify
+			for {
+				var innerWire uint64
+				var start int = iNdEx
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return 0, ErrIntOverflowIdentify
+					}
+					if iNdEx >= l {
+						return 0, io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					innerWire |= (uint64(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				innerWireType := int(innerWire & 0x7)
+				if innerWireType == 4 {
+					break
+				}
+				next, err := skipIdentify(dAtA[start:])
+				if err != nil {
+					return 0, err
+				}
+				iNdEx = start + next
+				if iNdEx < 0 {
+					return 0, ErrInvalidLengthIdentify
+				}
 			}
-			depth--
+			return iNdEx, nil
+		case 4:
+			return iNdEx, nil
 		case 5:
 			iNdEx += 4
+			return iNdEx, nil
 		default:
 			return 0, fmt.Errorf("proto: illegal wireType %d", wireType)
 		}
-		if depth == 0 {
-			return iNdEx, nil
-		}
 	}
-	return 0, io.ErrUnexpectedEOF
+	panic("unreachable")
 }
 
 var (
-	ErrInvalidLengthIdentify        = fmt.Errorf("proto: negative length found during unmarshaling")
-	ErrIntOverflowIdentify          = fmt.Errorf("proto: integer overflow")
-	ErrUnexpectedEndOfGroupIdentify = fmt.Errorf("proto: unexpected end of group")
+	ErrInvalidLengthIdentify = fmt.Errorf("proto: negative length found during unmarshaling")
+	ErrIntOverflowIdentify   = fmt.Errorf("proto: integer overflow")
 )
