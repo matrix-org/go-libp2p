@@ -5,19 +5,20 @@ import (
 	"github.com/libp2p/go-eventbus"
 	"github.com/libp2p/go-libp2p-core/event"
 	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/routing"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/record"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr-net"
 )
 
-// routingStateManager creates new SignedRoutingState records that can
+// peerRecordManager creates new SignedRoutingState records that can
 // be shared with other peers to inform them of our listen addresses in
 // a secure and authenticated way.
 //
 // New signed records are created in response to EvtLocalAddressesUpdated events,
 // and are emitted in EvtLocalRoutingStateUpdated events.
-type routingStateManager struct {
-	latestState *routing.SignedRoutingState
+type peerRecordManager struct {
+	latest *record.SignedEnvelope
 
 	ctx               context.Context
 	host              host.Host
@@ -30,8 +31,8 @@ type routingStateManager struct {
 	}
 }
 
-func NewRoutingStateManager(ctx context.Context, host host.Host, includeLocalAddrs bool) (*routingStateManager, error) {
-	m := &routingStateManager{
+func NewPeerRecordManager(ctx context.Context, host host.Host, includeLocalAddrs bool) (*peerRecordManager, error) {
+	m := &peerRecordManager{
 		ctx:               ctx,
 		host:              host,
 		includeLocalAddrs: includeLocalAddrs,
@@ -42,7 +43,7 @@ func NewRoutingStateManager(ctx context.Context, host host.Host, includeLocalAdd
 	if err != nil {
 		return nil, err
 	}
-	m.emitters.evtLocalRoutingStateUpdated, err = bus.Emitter(&event.EvtLocalPeerRoutingStateUpdated{}, eventbus.Stateful)
+	m.emitters.evtLocalRoutingStateUpdated, err = bus.Emitter(&event.EvtLocalPeerRecordUpdated{}, eventbus.Stateful)
 	if err != nil {
 		return nil, err
 	}
@@ -52,14 +53,14 @@ func NewRoutingStateManager(ctx context.Context, host host.Host, includeLocalAdd
 	return m, nil
 }
 
-func (m *routingStateManager) LatestState() *routing.SignedRoutingState {
+func (m *peerRecordManager) LatestRecord() *record.SignedEnvelope {
 	if m == nil {
 		return nil
 	}
-	return m.latestState
+	return m.latest
 }
 
-func (m *routingStateManager) handleEvents() {
+func (m *peerRecordManager) handleEvents() {
 	sub := m.subscriptions.localAddrsUpdated
 	defer func() {
 		_ = sub.Close()
@@ -81,21 +82,21 @@ func (m *routingStateManager) handleEvents() {
 	}
 }
 
-func (m *routingStateManager) updateRoutingState() {
-	state, err := m.makeRoutingState()
+func (m *peerRecordManager) updateRoutingState() {
+	envelope, err := m.makeSignedPeerRecord()
 	if err != nil {
-		log.Warnf("error creating routing state record: %v", err)
+		log.Warnf("error creating signed peer record: %v", err)
 		return
 	}
-	m.latestState = state
-	stateEvt := event.EvtLocalPeerRoutingStateUpdated{State: m.latestState}
+	m.latest = envelope
+	stateEvt := event.EvtLocalPeerRecordUpdated{SignedRecord: m.latest}
 	err = m.emitters.evtLocalRoutingStateUpdated.Emit(stateEvt)
 	if err != nil {
-		log.Warnf("error emitting routing state event: %v", err)
+		log.Warnf("error emitting event for updated peer record: %v", err)
 	}
 }
 
-func (m *routingStateManager) makeRoutingState() (*routing.SignedRoutingState, error) {
+func (m *peerRecordManager) makeSignedPeerRecord() (*record.SignedEnvelope, error) {
 	privKey := m.host.Peerstore().PrivKey(m.host.ID())
 	if privKey == nil {
 		log.Warn("error making routing state: unable to find host's private key in peerstore")
@@ -112,5 +113,5 @@ func (m *routingStateManager) makeRoutingState() (*routing.SignedRoutingState, e
 		}
 	}
 
-	return routing.MakeSignedRoutingState(privKey, addrs)
+	return peer.NewPeerRecord(m.host.ID(), addrs).Sign(privKey)
 }

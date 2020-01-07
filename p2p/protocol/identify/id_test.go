@@ -83,10 +83,10 @@ func subtestIDService(t *testing.T) {
 
 	// and the protocol versions.
 	t.Log("test peer2 has peer1 addrs correctly")
-	// h2 still has the forgetMe addr for h1, since it's not deleted immediately
-	testKnowsAddrs(t, h2, h1p, addrs) // has them
-	// the forgetMe addr was not certified by h1, so h2's CertifiedAddrs for
-	// h1 will only include the ones sent during the exchange
+	// the forgetMe addr (and any other uncertified addrs) is removed
+	// from h2's peerstore when it receives certified addrs for h1.
+	// h2 should only know the actual (certified) addrs
+	testKnowsAddrs(t, h2, h1p, h1.Peerstore().Addrs(h1p)) // has them
 	testHasCertifiedAddrs(t, h2, h1p, h1.Peerstore().Addrs(h1p))
 	testHasProtocolVersions(t, h2, h1p)
 	testHasPublicKey(t, h2, h1p, h1.Peerstore().PubKey(h1p)) // h1 should have h2's public key
@@ -98,26 +98,21 @@ func subtestIDService(t *testing.T) {
 		t.Fatal("should have no connections")
 	}
 
+	t.Log("testing addrs just after disconnect")
 	// addresses don't immediately expire on disconnect, so we should still have them
-	testKnowsAddrs(t, h2, h1p, addrs)
+	testKnowsAddrs(t, h2, h1p, h1.Peerstore().Addrs(h1p))
 	testKnowsAddrs(t, h1, h2p, h2.Peerstore().Addrs(h2p))
 	testHasCertifiedAddrs(t, h1, h2p, h2.Peerstore().Addrs(h2p))
 	testHasCertifiedAddrs(t, h2, h1p, h1.Peerstore().Addrs(h1p))
 
-	// the forgetMe addr had its TTL reduced during the identify exchange,
-	// since it was not present in the exchanged addrs,
-	// so it will be forgotten first
-	time.Sleep(500 * time.Millisecond)
-	testKnowsAddrs(t, h2, h1p, addrs[:len(addrs)-1])
-
-	// the remaining addrs had their TTLs reduced on disconnect, and
+	// the addrs had their TTLs reduced on disconnect, and
 	// will be forgotten soon after
-	time.Sleep(1 * time.Second)
+	t.Log("testing addrs after TTL expiration")
+	time.Sleep(2 * time.Second)
 	testKnowsAddrs(t, h1, h2p, []ma.Multiaddr{})
 	testKnowsAddrs(t, h2, h1p, []ma.Multiaddr{})
 	testHasCertifiedAddrs(t, h1, h2p, []ma.Multiaddr{})
 	testHasCertifiedAddrs(t, h2, h1p, []ma.Multiaddr{})
-
 }
 
 func testKnowsAddrs(t *testing.T, h host.Host, p peer.ID, expected []ma.Multiaddr) {
@@ -129,8 +124,23 @@ func testKnowsAddrs(t *testing.T, h host.Host, p peer.ID, expected []ma.Multiadd
 
 func testHasCertifiedAddrs(t *testing.T, h host.Host, p peer.ID, expected []ma.Multiaddr) {
 	t.Helper()
-	actual := h.Peerstore().CertifiedAddrs(p)
-	checkAddrs(t, expected, actual, fmt.Sprintf("%s did not have certified addr for %s", h.ID(), p))
+	cab, ok := peerstore.GetCertifiedAddrBook(h.Peerstore())
+	if !ok {
+		t.Error("expected peerstore to implement CertifiedAddrBook")
+	}
+	recordEnvelope := cab.SignedPeerRecord(p)
+	if recordEnvelope == nil {
+		if len(expected) == 0 {
+			return
+		}
+		t.Errorf("peerstore has no signed record for peer %s", p)
+	}
+	rec, err := peer.PeerRecordFromSignedEnvelope(recordEnvelope)
+	if err != nil {
+		t.Error("Error unwrapping signed PeerRecord from envelope", err)
+	}
+
+	checkAddrs(t, expected, rec.Addrs, fmt.Sprintf("%s did not have certified addr for %s", h.ID(), p))
 }
 
 func checkAddrs(t *testing.T, expected, actual []ma.Multiaddr, msg string) {
