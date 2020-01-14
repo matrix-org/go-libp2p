@@ -254,7 +254,7 @@ func (h *BasicHost) newStreamHandler(s network.Stream) {
 
 	if h.negtimeout > 0 {
 		if err := s.SetDeadline(time.Now().Add(h.negtimeout)); err != nil {
-			log.Error("setting stream deadline: ", err)
+			log.Debug("setting stream deadline: ", err)
 			s.Reset()
 			return
 		}
@@ -283,7 +283,7 @@ func (h *BasicHost) newStreamHandler(s network.Stream) {
 
 	if h.negtimeout > 0 {
 		if err := s.SetDeadline(time.Time{}); err != nil {
-			log.Error("resetting stream deadline: ", err)
+			log.Debugf("resetting stream deadline: ", err)
 			s.Reset()
 			return
 		}
