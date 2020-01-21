@@ -84,8 +84,8 @@ type IDService struct {
 	// TODO: instead of expiring, remove these when we disconnect
 	observedAddrs *ObservedAddrSet
 
-	routingStateManager *peerRecordManager
-	useSignedAddrs      bool
+	peerRecordManager *peerRecordManager
+	useSignedAddrs    bool
 
 	subscriptions struct {
 		localProtocolsUpdated  event.Subscription
@@ -131,7 +131,7 @@ func NewIDService(ctx context.Context, h host.Host, opts ...Option) *IDService {
 	if err != nil {
 		log.Warnf("identify service not subscribed to local routing state changes; err: %s", err)
 	} else {
-		go s.handleEvents(s.subscriptions.localPeerRecordUpdated, s.handleRoutingStateUpdated)
+		go s.handleEvents(s.subscriptions.localPeerRecordUpdated, s.handlePeerRecordUpdated)
 	}
 
 	s.emitters.evtPeerProtocolsUpdated, err = h.EventBus().Emitter(&event.EvtPeerProtocolsUpdated{})
@@ -139,7 +139,7 @@ func NewIDService(ctx context.Context, h host.Host, opts ...Option) *IDService {
 		log.Warningf("identify service not emitting peer protocol updates; err: %s", err)
 	}
 
-	s.routingStateManager, err = NewPeerRecordManager(ctx, h, cfg.includeLocalAddrsInRoutingState)
+	s.peerRecordManager, err = NewPeerRecordManager(ctx, h, cfg.includeLocalAddrsInRoutingState)
 	if err != nil {
 		log.Warnf("identify service not tracking routing state changes; err: %s", err)
 	}
@@ -176,8 +176,8 @@ func (ids *IDService) handleProtosChanged(evt interface{}) {
 	ids.fireProtocolDelta(evt.(event.EvtLocalProtocolsUpdated))
 }
 
-func (ids *IDService) handleRoutingStateUpdated(evt interface{}) {
-	log.Debug("triggering push based on routing state updated event")
+func (ids *IDService) handlePeerRecordUpdated(evt interface{}) {
+	log.Debug("triggering push based on updated local PeerRecord")
 	ids.Push()
 }
 
@@ -345,7 +345,7 @@ func (ids *IDService) populateMessage(mes *pb.Identify, c network.Conn) {
 
 	// Generate a signed peer record containing our listen addresses and
 	// send it along with the unsigned addrs
-	signedRecord := ids.routingStateManager.LatestRecord()
+	signedRecord := ids.peerRecordManager.LatestRecord()
 	if ids.useSignedAddrs && signedRecord != nil {
 		envelopeBytes, err := signedRecord.Marshal()
 		if err != nil {
@@ -414,7 +414,7 @@ func (ids *IDService) consumeMessage(mes *pb.Identify, c network.Conn) {
 	// many undialable addresses for other peers.
 
 	// add certified addresses for the peer, if they sent us a signed peer record
-	var signedPeerRecord *record.SignedEnvelope
+	var signedPeerRecord *record.Envelope
 	if ids.useSignedAddrs {
 		var err error
 		signedPeerRecord, err = signedPeerRecordFromMessage(mes)
@@ -438,7 +438,7 @@ func (ids *IDService) consumeMessage(mes *pb.Identify, c network.Conn) {
 	// add signed addrs if we have them and the peerstore supports them
 	cab, ok := peerstore.GetCertifiedAddrBook(ids.Host.Peerstore())
 	if ok && signedPeerRecord != nil {
-		addErr := cab.AddCertifiedAddrs(signedPeerRecord, ttl)
+		addErr := cab.ProcessPeerRecord(signedPeerRecord, ttl)
 		if addErr != nil {
 			log.Errorf("error adding signed addrs to peerstore: %v", addErr)
 			// fall back to adding unsigned addrs
@@ -632,11 +632,12 @@ func addrInAddrs(a ma.Multiaddr, as []ma.Multiaddr) bool {
 	return false
 }
 
-func signedPeerRecordFromMessage(msg *pb.Identify) (*record.SignedEnvelope, error) {
+func signedPeerRecordFromMessage(msg *pb.Identify) (*record.Envelope, error) {
 	if msg.SignedPeerRecord == nil || len(msg.SignedPeerRecord) == 0 {
 		return nil, nil
 	}
-	return record.ConsumeEnvelope(msg.SignedPeerRecord, peer.PeerRecordEnvelopeDomain)
+	env, _, err := record.ConsumeEnvelope(msg.SignedPeerRecord, peer.PeerRecordEnvelopeDomain)
+	return env, err
 }
 
 // netNotifiee defines methods to be used with the IpfsDHT

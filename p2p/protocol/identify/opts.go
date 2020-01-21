@@ -26,6 +26,6 @@ func DisableSignedAddrSupportForTesting() Option {
 	}
 }
 
-func IncludeLocalAddrsInRoutingState(cfg *config) {
+func IncludeLocalAddrsInPeerRecord(cfg *config) {
 	cfg.includeLocalAddrsInRoutingState = true
 }

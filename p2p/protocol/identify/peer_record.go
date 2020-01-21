@@ -2,7 +2,10 @@ package identify
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/libp2p/go-eventbus"
+	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/event"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -11,17 +14,22 @@ import (
 	manet "github.com/multiformats/go-multiaddr-net"
 )
 
-// peerRecordManager creates new SignedRoutingState records that can
+// peerRecordManager creates new signed peer.PeerRecords that can
 // be shared with other peers to inform them of our listen addresses in
 // a secure and authenticated way.
 //
 // New signed records are created in response to EvtLocalAddressesUpdated events,
-// and are emitted in EvtLocalRoutingStateUpdated events.
+// and are emitted in EvtLocalPeerRecordUpdated events.
+//
+// EvtLocalPeerRecordUpdated is emitted using a Stateful emitter, so new subscribers
+// will immediately receive the current record when they subscribe, with future
+// records delivered in future events.
 type peerRecordManager struct {
-	latest *record.SignedEnvelope
+	latest     *record.Envelope
+	hostID     peer.ID
+	signingKey crypto.PrivKey
 
 	ctx               context.Context
-	host              host.Host
 	includeLocalAddrs bool
 	subscriptions     struct {
 		localAddrsUpdated event.Subscription
@@ -32,13 +40,25 @@ type peerRecordManager struct {
 }
 
 func NewPeerRecordManager(ctx context.Context, host host.Host, includeLocalAddrs bool) (*peerRecordManager, error) {
+	hostKey := host.Peerstore().PrivKey(host.ID())
+	if hostKey == nil {
+		return nil, errors.New("unable to get private key for host")
+	}
+
 	m := &peerRecordManager{
 		ctx:               ctx,
-		host:              host,
+		signingKey:        hostKey,
+		hostID:            host.ID(),
 		includeLocalAddrs: includeLocalAddrs,
 	}
+
+	initialRec, err := m.makeSignedPeerRecord(host.Addrs())
+	if err != nil {
+		return nil, fmt.Errorf("error constructing initial peer record: %w", err)
+	}
+	m.latest = initialRec
+
 	bus := host.EventBus()
-	var err error
 	m.subscriptions.localAddrsUpdated, err = bus.Subscribe(&event.EvtLocalAddressesUpdated{}, eventbus.BufSize(128))
 	if err != nil {
 		return nil, err
@@ -47,13 +67,13 @@ func NewPeerRecordManager(ctx context.Context, host host.Host, includeLocalAddrs
 	if err != nil {
 		return nil, err
 	}
+	m.emitLatest()
 
-	m.updateRoutingState()
 	go m.handleEvents()
 	return m, nil
 }
 
-func (m *peerRecordManager) LatestRecord() *record.SignedEnvelope {
+func (m *peerRecordManager) LatestRecord() *record.Envelope {
 	if m == nil {
 		return nil
 	}
@@ -71,47 +91,56 @@ func (m *peerRecordManager) handleEvents() {
 
 	for {
 		select {
-		case _, more := <-sub.Out():
+		case evt, more := <-sub.Out():
 			if !more {
 				return
 			}
-			m.updateRoutingState()
+			m.update(evt.(event.EvtLocalAddressesUpdated))
 		case <-m.ctx.Done():
 			return
 		}
 	}
 }
 
-func (m *peerRecordManager) updateRoutingState() {
-	envelope, err := m.makeSignedPeerRecord()
+func (m *peerRecordManager) update(evt event.EvtLocalAddressesUpdated) {
+	envelope, err := m.makeSignedPeerRecord(addrsFromEvent(evt))
 	if err != nil {
 		log.Warnf("error creating signed peer record: %v", err)
 		return
 	}
 	m.latest = envelope
+	m.emitLatest()
+}
+
+func (m *peerRecordManager) emitLatest() {
 	stateEvt := event.EvtLocalPeerRecordUpdated{SignedRecord: m.latest}
-	err = m.emitters.evtLocalRoutingStateUpdated.Emit(stateEvt)
+	err := m.emitters.evtLocalRoutingStateUpdated.Emit(stateEvt)
 	if err != nil {
 		log.Warnf("error emitting event for updated peer record: %v", err)
 	}
 }
 
-func (m *peerRecordManager) makeSignedPeerRecord() (*record.SignedEnvelope, error) {
-	privKey := m.host.Peerstore().PrivKey(m.host.ID())
-	if privKey == nil {
-		log.Warn("error making routing state: unable to find host's private key in peerstore")
-	}
-
-	var addrs []multiaddr.Multiaddr
-	if m.includeLocalAddrs {
-		addrs = m.host.Addrs()
-	} else {
-		for _, a := range m.host.Addrs() {
-			if manet.IsPublicAddr(a) {
-				addrs = append(addrs, a)
-			}
+func (m *peerRecordManager) makeSignedPeerRecord(current []multiaddr.Multiaddr) (*record.Envelope, error) {
+	addrs := make([]multiaddr.Multiaddr, 0, len(current))
+	for _, a := range current {
+		if a == nil {
+			continue
+		}
+		if m.includeLocalAddrs || manet.IsPublicAddr(a) {
+			addrs = append(addrs, a)
 		}
 	}
 
-	return peer.NewPeerRecord(m.host.ID(), addrs).Sign(privKey)
+	rec := peer.NewPeerRecord()
+	rec.PeerID = m.hostID
+	rec.Addrs = addrs
+	return rec.Sign(m.signingKey)
+}
+
+func addrsFromEvent(evt event.EvtLocalAddressesUpdated) []multiaddr.Multiaddr {
+	addrs := make([]multiaddr.Multiaddr, len(evt.Current))
+	for _, a := range evt.Current {
+		addrs = append(addrs, a.Address)
+	}
+	return addrs
 }

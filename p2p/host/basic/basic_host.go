@@ -304,22 +304,16 @@ func (h *BasicHost) newStreamHandler(s network.Stream) {
 // changed and emits an EvtLocalAddressesUpdatedEvent if so.
 // Warning: this interface is unstable and may disappear in the future.
 func (h *BasicHost) CheckForAddressChanges() {
-	changed := false
-
 	h.mx.Lock()
 	addrs := h.Addrs()
-	added, removed := addrDiff(h.lastAddrs, addrs)
-	if len(added) != 0 || len(removed) != 0 {
-		changed = true
+	changeEvt := makeUpdatedAddrEvent(h.lastAddrs, addrs)
+	if changeEvt != nil {
 		h.lastAddrs = addrs
 	}
 	h.mx.Unlock()
 
-	if changed {
-		err := h.emitters.evtLocalAddrsUpdated.Emit(event.EvtLocalAddressesUpdated{
-			Added:   added,
-			Removed: removed,
-		})
+	if changeEvt != nil {
+		err := h.emitters.evtLocalAddrsUpdated.Emit(*changeEvt)
 		if err != nil {
 			log.Warnf("error emitting event for updated addrs: %s", err)
 		}
@@ -350,23 +344,36 @@ func (h *BasicHost) background(p goprocess.Process) {
 	}
 }
 
-func addrDiff(old, new []ma.Multiaddr) (added, removed []ma.Multiaddr) {
-	oldmap := make(map[string]ma.Multiaddr, len(old))
+func makeUpdatedAddrEvent(prev, current []ma.Multiaddr) *event.EvtLocalAddressesUpdated {
+	prevmap := make(map[string]ma.Multiaddr, len(prev))
+	evt := event.EvtLocalAddressesUpdated{Diffs: true}
+	addrsAdded := false
 
-	for _, addr := range old {
-		oldmap[string(addr.Bytes())] = addr
+	for _, addr := range prev {
+		prevmap[string(addr.Bytes())] = addr
 	}
-	for _, addr := range new {
-		_, ok := oldmap[string(addr.Bytes())]
-		if !ok {
-			added = append(added, addr)
+	for _, addr := range current {
+		_, ok := prevmap[string(addr.Bytes())]
+		updated := event.UpdatedAddress{Address: addr}
+		if ok {
+			updated.Action = event.Maintained
+		} else {
+			updated.Action = event.Added
+			addrsAdded = true
 		}
-		delete(oldmap, string(addr.Bytes()))
+		evt.Current = append(evt.Current, updated)
+		delete(prevmap, string(addr.Bytes()))
 	}
-	for _, addr := range oldmap {
-		removed = append(removed, addr)
+	for _, addr := range prevmap {
+		updated := event.UpdatedAddress{Action: event.Removed, Address: addr}
+		evt.Removed = append(evt.Removed, updated)
 	}
-	return added, removed
+
+	if !addrsAdded && len(evt.Removed) == 0 {
+		return nil
+	}
+
+	return &evt
 }
 
 // ID returns the (local) peer.ID associated with this Host

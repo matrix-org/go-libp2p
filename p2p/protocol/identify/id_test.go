@@ -36,8 +36,8 @@ func subtestIDService(t *testing.T) {
 	h1p := h1.ID()
 	h2p := h2.ID()
 
-	ids1 := identify.NewIDService(ctx, h1, identify.IncludeLocalAddrsInRoutingState)
-	ids2 := identify.NewIDService(ctx, h2, identify.IncludeLocalAddrsInRoutingState)
+	ids1 := identify.NewIDService(ctx, h1, identify.IncludeLocalAddrsInPeerRecord)
+	ids2 := identify.NewIDService(ctx, h2, identify.IncludeLocalAddrsInPeerRecord)
 
 	testKnowsAddrs(t, h1, h2p, []ma.Multiaddr{}) // nothing
 	testKnowsAddrs(t, h2, h1p, []ma.Multiaddr{}) // nothing
@@ -128,16 +128,20 @@ func testHasCertifiedAddrs(t *testing.T, h host.Host, p peer.ID, expected []ma.M
 	if !ok {
 		t.Error("expected peerstore to implement CertifiedAddrBook")
 	}
-	recordEnvelope := cab.SignedPeerRecord(p)
+	recordEnvelope := cab.GetPeerRecord(p)
 	if recordEnvelope == nil {
 		if len(expected) == 0 {
 			return
 		}
-		t.Errorf("peerstore has no signed record for peer %s", p)
+		t.Fatalf("peerstore has no signed record for peer %s", p)
 	}
-	rec, err := peer.PeerRecordFromSignedEnvelope(recordEnvelope)
+	r, err := recordEnvelope.Record()
 	if err != nil {
 		t.Error("Error unwrapping signed PeerRecord from envelope", err)
+	}
+	rec, ok := r.(*peer.PeerRecord)
+	if !ok {
+		t.Error("unexpected record type")
 	}
 
 	checkAddrs(t, expected, rec.Addrs, fmt.Sprintf("%s did not have certified addr for %s", h.ID(), p))
