@@ -52,12 +52,15 @@ func NewPeerRecordManager(ctx context.Context, host host.Host, includeLocalAddrs
 		includeLocalAddrs: includeLocalAddrs,
 	}
 
-	initialRec, err := m.makeSignedPeerRecord(host.Addrs())
-	if err != nil {
-		return nil, fmt.Errorf("error constructing initial peer record: %w", err)
+	if len(host.Addrs()) != 0 {
+		initialRec, err := m.makeSignedPeerRecord(host.Addrs())
+		if err != nil {
+			return nil, fmt.Errorf("error constructing initial peer record: %w", err)
+		}
+		m.latest = initialRec
 	}
-	m.latest = initialRec
 
+	var err error
 	bus := host.EventBus()
 	m.subscriptions.localAddrsUpdated, err = bus.Subscribe(&event.EvtLocalAddressesUpdated{}, eventbus.BufSize(128))
 	if err != nil {
@@ -67,7 +70,6 @@ func NewPeerRecordManager(ctx context.Context, host host.Host, includeLocalAddrs
 	if err != nil {
 		return nil, err
 	}
-	m.emitLatest()
 
 	go m.handleEvents()
 	return m, nil
