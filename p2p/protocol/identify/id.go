@@ -139,7 +139,8 @@ func NewIDService(ctx context.Context, h host.Host, opts ...Option) *IDService {
 		log.Warningf("identify service not emitting peer protocol updates; err: %s", err)
 	}
 
-	s.peerRecordManager, err = NewPeerRecordManager(ctx, h, cfg.includeLocalAddrsInRoutingState)
+	hostKey := h.Peerstore().PrivKey(h.ID())
+	s.peerRecordManager, err = NewPeerRecordManager(ctx, h.EventBus(), hostKey, h.Addrs(), cfg.includeLocalAddrsInPeerRecord)
 	if err != nil {
 		log.Warnf("identify service not tracking routing state changes; err: %s", err)
 	}

@@ -2,12 +2,10 @@ package identify
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/libp2p/go-eventbus"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/event"
-	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/record"
 	"github.com/multiformats/go-multiaddr"
@@ -39,29 +37,27 @@ type peerRecordManager struct {
 	}
 }
 
-func NewPeerRecordManager(ctx context.Context, host host.Host, includeLocalAddrs bool) (*peerRecordManager, error) {
-	hostKey := host.Peerstore().PrivKey(host.ID())
-	if hostKey == nil {
-		return nil, errors.New("unable to get private key for host")
+func NewPeerRecordManager(ctx context.Context, bus event.Bus, hostKey crypto.PrivKey, initialAddrs []multiaddr.Multiaddr, includeLocalAddrs bool) (*peerRecordManager, error) {
+	hostID, err := peer.IDFromPrivateKey(hostKey)
+	if err != nil {
+		return nil, err
 	}
 
 	m := &peerRecordManager{
 		ctx:               ctx,
 		signingKey:        hostKey,
-		hostID:            host.ID(),
+		hostID:            hostID,
 		includeLocalAddrs: includeLocalAddrs,
 	}
 
-	if len(host.Addrs()) != 0 {
-		initialRec, err := m.makeSignedPeerRecord(host.Addrs())
+	if len(initialAddrs) != 0 {
+		initialRec, err := m.makeSignedPeerRecord(initialAddrs)
 		if err != nil {
 			return nil, fmt.Errorf("error constructing initial peer record: %w", err)
 		}
 		m.latest = initialRec
 	}
 
-	var err error
-	bus := host.EventBus()
 	m.subscriptions.localAddrsUpdated, err = bus.Subscribe(&event.EvtLocalAddressesUpdated{}, eventbus.BufSize(128))
 	if err != nil {
 		return nil, err
@@ -72,6 +68,11 @@ func NewPeerRecordManager(ctx context.Context, host host.Host, includeLocalAddrs
 	}
 
 	go m.handleEvents()
+
+	if m.latest != nil {
+		m.emitLatest()
+	}
+
 	return m, nil
 }
 
