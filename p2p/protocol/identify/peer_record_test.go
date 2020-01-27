@@ -39,7 +39,7 @@ func TestPeerRecordManagerEmitsPeerRecord(t *testing.T) {
 	test.AssertAddressesEqual(t, addrs, peerRec.Addrs)
 }
 
-func TestPeerRecordExcludesLocalAddrsIfFlagIsUnset(t *testing.T) {
+func TestPeerRecordExcludesLocalAddrsIfFlagIsSet(t *testing.T) {
 	bus, emitter, sub := setupEventBus(t)
 	priv, _, err := test.RandTestKeyPair(crypto.Ed25519, 256)
 	if err != nil {
@@ -48,7 +48,7 @@ func TestPeerRecordExcludesLocalAddrsIfFlagIsUnset(t *testing.T) {
 
 	ctx := context.Background()
 	var initialAddrs []multiaddr.Multiaddr
-	_, err = NewPeerRecordManager(ctx, bus, priv, initialAddrs, false)
+	_, err = NewPeerRecordManager(ctx, bus, priv, initialAddrs, true)
 	if err != nil {
 		t.Fatalf("error creating peerRecordManager: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestPeerRecordExcludesLocalAddrsIfFlagIsUnset(t *testing.T) {
 	test.AssertAddressesEqual(t, expected, peerRec.Addrs)
 }
 
-func TestPeerRecordIncludesLocalAddrsIfFlagIsSet(t *testing.T) {
+func TestPeerRecordIncludesLocalAddrsIfFlagIsUnset(t *testing.T) {
 	bus, emitter, sub := setupEventBus(t)
 	priv, _, err := test.RandTestKeyPair(crypto.Ed25519, 256)
 	if err != nil {
@@ -79,7 +79,7 @@ func TestPeerRecordIncludesLocalAddrsIfFlagIsSet(t *testing.T) {
 
 	ctx := context.Background()
 	var initialAddrs []multiaddr.Multiaddr
-	_, err = NewPeerRecordManager(ctx, bus, priv, initialAddrs, true)
+	_, err = NewPeerRecordManager(ctx, bus, priv, initialAddrs, false)
 	if err != nil {
 		t.Fatalf("error creating peerRecordManager: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestPeerRecordManagerEmitsRecordImmediatelyIfInitialAddrsAreProvided(t *tes
 	initialAddrs := []multiaddr.Multiaddr{
 		multiaddr.StringCast("/ip4/1.2.3.4/tcp/42"),
 	}
-	_, err = NewPeerRecordManager(ctx, bus, priv, initialAddrs, true)
+	_, err = NewPeerRecordManager(ctx, bus, priv, initialAddrs, false)
 	if err != nil {
 		t.Fatalf("error creating peerRecordManager: %v", err)
 	}

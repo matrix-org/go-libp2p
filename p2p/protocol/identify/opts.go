@@ -1,9 +1,9 @@
 package identify
 
 type config struct {
-	userAgent                     string
-	disableSignedAddrSupport      bool
-	includeLocalAddrsInPeerRecord bool
+	userAgent                       string
+	disableSignedAddrSupport        bool
+	excludeLocalAddrsFromPeerRecord bool
 }
 
 // Option is an option function for identify.
@@ -26,14 +26,16 @@ func DisableSignedAddrSupportForTesting() Option {
 	}
 }
 
-// IncludeLocalAddrsInPeerRecord controls whether the signed PeerRecords that are exchanged
+// ExcludeLocalAddrsFromPeerRecord controls whether the signed PeerRecords that are exchanged
 // with other peers during the identify exchange will include local addresses.
 //
 // Addresses are considered "local" if they are IP loopback addresses, or if they belong to
 // a reserved private IP address range.
 //
-// By default, local addresses are not included in PeerRecords. Use this option to
-// force them to be included.
-func IncludeLocalAddrsInPeerRecord(cfg *config) {
-	cfg.includeLocalAddrsInPeerRecord = true
+// By default, local addresses are included in PeerRecords. To exclude them,
+// pass ExcludeLocalAddrsFromPeerRecord(true) into NewIDService.
+func ExcludeLocalAddrsFromPeerRecord(exclude bool) Option {
+	return func(cfg *config) {
+		cfg.excludeLocalAddrsFromPeerRecord = exclude
+	}
 }

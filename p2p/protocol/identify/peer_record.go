@@ -28,7 +28,7 @@ type peerRecordManager struct {
 	signingKey crypto.PrivKey
 
 	ctx               context.Context
-	includeLocalAddrs bool
+	excludeLocalAddrs bool
 	subscriptions     struct {
 		localAddrsUpdated event.Subscription
 	}
@@ -37,7 +37,7 @@ type peerRecordManager struct {
 	}
 }
 
-func NewPeerRecordManager(ctx context.Context, bus event.Bus, hostKey crypto.PrivKey, initialAddrs []multiaddr.Multiaddr, includeLocalAddrs bool) (*peerRecordManager, error) {
+func NewPeerRecordManager(ctx context.Context, bus event.Bus, hostKey crypto.PrivKey, initialAddrs []multiaddr.Multiaddr, excludeLocalAddrs bool) (*peerRecordManager, error) {
 	hostID, err := peer.IDFromPrivateKey(hostKey)
 	if err != nil {
 		return nil, err
@@ -47,7 +47,7 @@ func NewPeerRecordManager(ctx context.Context, bus event.Bus, hostKey crypto.Pri
 		ctx:               ctx,
 		signingKey:        hostKey,
 		hostID:            hostID,
-		includeLocalAddrs: includeLocalAddrs,
+		excludeLocalAddrs: excludeLocalAddrs,
 	}
 
 	if len(initialAddrs) != 0 {
@@ -129,7 +129,7 @@ func (m *peerRecordManager) makeSignedPeerRecord(current []multiaddr.Multiaddr) 
 		if a == nil {
 			continue
 		}
-		if m.includeLocalAddrs || manet.IsPublicAddr(a) {
+		if !m.excludeLocalAddrs || manet.IsPublicAddr(a) {
 			addrs = append(addrs, a)
 		}
 	}
