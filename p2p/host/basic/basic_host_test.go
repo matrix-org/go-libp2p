@@ -569,30 +569,30 @@ func TestHostAddrChangeDetection(t *testing.T) {
 		t.Fatalf("expected 0 addrs, got %d", len(addrs))
 	}
 
-	// Drain EvtLocalAddressesUpdated from the bus in a goroutine until we have as many as we expect
-	var receivedEvents []event.EvtLocalAddressesUpdated
-	go func() {
-		for {
-			select {
-			case evt, more := <-sub.Out():
-				if !more {
-					return
-				}
-				receivedEvents = append(receivedEvents, evt.(event.EvtLocalAddressesUpdated))
-				if len(receivedEvents) == len(expectedEvents) {
-					return
-				}
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	// Advance between addrSets, with a little delay to let the event propagate over the bus
+	// Advance between addrSets
 	for i := 1; i < len(addrSets); i++ {
 		currentAddrSet = i
 		h.CheckForAddressChanges() // forces the host to check for changes now, instead of waiting for background update
-		time.Sleep(100 * time.Millisecond)
+	}
+
+	// drain events from the subscription
+	var receivedEvents []event.EvtLocalAddressesUpdated
+readEvents:
+	for {
+		select {
+		case evt, more := <-sub.Out():
+			if !more {
+				break readEvents
+			}
+			receivedEvents = append(receivedEvents, evt.(event.EvtLocalAddressesUpdated))
+			if len(receivedEvents) == len(expectedEvents) {
+				break readEvents
+			}
+		case <-ctx.Done():
+			break readEvents
+		case <-time.After(1 * time.Second):
+			break readEvents
+		}
 	}
 
 	// assert that we received the events we expected
