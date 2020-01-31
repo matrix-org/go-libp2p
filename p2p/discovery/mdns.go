@@ -169,14 +169,24 @@ func (m *mdnsService) handleEntry(e *mdns.ServiceEntry) {
 		return
 	}
 
-	maddr, err := manet.FromNetAddr(&net.TCPAddr{
+	maddr6, err := manet.FromNetAddr(&net.TCPAddr{
 		IP:   e.AddrV6,
 		Port: e.Port,
 	})
 
-	ad, err := net.ResolveTCPAddr("tcp6", fmt.Sprintf("%s:%d", e.Host, e.Port))
+	maddr4, err := manet.FromNetAddr(&net.TCPAddr{
+		IP:   e.AddrV4,
+		Port: e.Port,
+	})
+
+	ad6, err := net.ResolveTCPAddr("tcp6", fmt.Sprintf("%s:%d", e.Host, e.Port))
 	if err == nil {
-		maddr, err = manet.FromNetAddr(ad)
+		maddr6, err = manet.FromNetAddr(ad6)
+	}
+
+	ad4, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", e.Host, e.Port))
+	if err == nil {
+		maddr4, err = manet.FromNetAddr(ad4)
 	}
 
 	if err != nil {
@@ -186,7 +196,7 @@ func (m *mdnsService) handleEntry(e *mdns.ServiceEntry) {
 
 	pi := peer.AddrInfo{
 		ID:    mpeer,
-		Addrs: []ma.Multiaddr{maddr},
+		Addrs: []ma.Multiaddr{maddr6, maddr4},
 	}
 
 	m.lk.Lock()
