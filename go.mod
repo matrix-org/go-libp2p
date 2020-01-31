@@ -1,4 +1,4 @@
-module github.com/libp2p/go-libp2p
+module github.com/matrix-org/go-libp2p
 
 require (
 	github.com/gogo/protobuf v1.3.1
