@@ -156,7 +156,7 @@ func (m *mdnsService) pollForEntries(ctx context.Context) {
 }
 
 func (m *mdnsService) handleEntry(e *mdns.ServiceEntry) {
-	log.Debugf("Handling MDNS entry: %s:%d %s", e.AddrV4, e.Port, e.Info)
+	log.Debugf("Handling MDNS entry: %s:%d %s", e.AddrV6, e.Port, e.Info)
 	mpeer, err := peer.IDB58Decode(e.Info)
 	if err != nil {
 		log.Warning("Error parsing peer ID from mdns entry: ", err)
@@ -169,7 +169,7 @@ func (m *mdnsService) handleEntry(e *mdns.ServiceEntry) {
 	}
 
 	maddr, err := manet.FromNetAddr(&net.TCPAddr{
-		IP:   e.AddrV4,
+		IP:   e.AddrV6,
 		Port: e.Port,
 	})
 	if err != nil {
