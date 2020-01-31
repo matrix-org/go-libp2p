@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -172,6 +173,12 @@ func (m *mdnsService) handleEntry(e *mdns.ServiceEntry) {
 		IP:   e.AddrV6,
 		Port: e.Port,
 	})
+
+	ad, err := net.ResolveTCPAddr("tcp6", fmt.Sprintf("%s:%d", e.Host, e.Port))
+	if err == nil {
+		maddr, err = manet.FromNetAddr(ad)
+	}
+
 	if err != nil {
 		log.Warning("Error parsing multiaddr from mdns entry: ", err)
 		return
